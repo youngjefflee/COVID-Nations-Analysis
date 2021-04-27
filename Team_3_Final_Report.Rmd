@@ -1,0 +1,1144 @@
+---
+title: "COVID-19 Impact on Key Countries"
+author: "Duarte 'Eddie' Costeira, Chia-Chun Lee, Dayong Lee, Jeff Lee"
+date: "20 November 2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+theme: Singapore
+colortheme: seagull
+fontsize: 10pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(maps)
+library(viridis)
+library(RSQLite)
+library(yrbss)
+library(dplyr)
+library(xml2)
+library(rvest)
+library(ggplot2)
+library(quanteda)
+library(tidyverse)
+library(scales)
+library(stringr)
+library(grid)
+library(lubridate)
+library(readr)
+library(reshape2)
+library(openair)
+library(MASS)
+library(PerformanceAnalytics)
+library(Metrics)
+library(stargazer)
+
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", 
+               "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+theme1 <- theme_bw() +
+  theme(axis.text = element_text(size=8,
+                                 colour="#6b3447"),
+        axis.title = element_text(size=10,
+                                  colour="#2f2f63"),
+        legend.title = element_text(size=8,
+                                    colour="#2f2f63"),
+        legend.text = element_text(size=8,
+                                   colour="#6b3447"),
+        title = element_text(size=12,
+                             colour="#2f2f63"),
+        axis.ticks = element_line(colour="#6b3447"),
+        plot.caption = element_text(size=8,
+                                    colour="#2f2f63"),
+        plot.subtitle = element_text(size=10,
+                                     colour="#2f2f63"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank())
+
+dcon <- dbConnect(SQLite(),
+                  dbname = "./COVID_Stock_Index.db")
+
+# load NYT data
+load("./dt.all.Rdata")
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.cap = "Total confirmed COVID-19 cases for all countries as of 15 October 2020, visualized on a logarithmic scale."}
+#extract every countries = (exclude everything that has _)
+query <- paste0("
+                SELECT *
+                FROM epidemiology
+                WHERE key NOT LIKE '%/_%' escape '/';")
+res <- dbSendQuery(dcon, query)
+covid <- dbFetch(res,
+                 -1)
+dbClearResult(res)
+
+#total tested, confirmed, date=2020-10-15, create positive rate
+covid <-covid  %>% 
+  dplyr::select(date,
+                key,
+                total_confirmed) %>% 
+  subset(date == "2020-10-15")%>% 
+  mutate(total_confirmed = as.numeric(total_confirmed))
+
+#convert country code to country names
+covid$key <- str_replace_all(covid$key,c("AD" = "Andorra",
+                                         "AE" = "United Arab Emirates",
+                                         "AF" = "Afghanistan",
+                                         "AG" = "Antigua and Barbuda",
+                                         "AI" = "Anguilla",
+                                         "AL" = "Albania",
+                                         "AM" = "Armenia",
+                                         "AO" = "Angola",
+                                         "AR" = "Argentina",
+                                         "AS" = "American Samoa",
+                                         "AT" = "Austria",
+                                         "AU" = "Australia",
+                                         "AW" = "Aruba",
+                                         "AZ" = "Azerbaijan",
+                                         "BA" = "Bosnia and Herzegovina",
+                                         "BB" = "Barbados",
+                                         "BD" = "Burundi",
+                                         "BE" = "Belgium",
+                                         "BF" = "Burkina Faso",
+                                         "BG" = "Bulgaria",
+                                         "BH" = "Bahrain",
+                                         "BI" = "Burundi",
+                                         "BJ" = "Benin",
+                                         "BM" = "Bermuda",
+                                         "BN" = "Brunei",
+                                         "BO" = "Bolivia",
+                                         "BQ" = "Bonaire",
+                                         "BR" = "Brazil",
+                                         "BS" = "Bahamas",
+                                         "BT" = "Bhutan",
+                                         "BW" = "Botswana",
+                                         "BY" = "Belarus",
+                                         "BZ" = "Belize",
+                                         "CA" = "Canada",
+                                         "CD" = "Democratic Republic of the Congo",
+                                         "CF" = "Central African Republic",
+                                         "CG" = "Republic of the Congo",
+                                         "CH" = "Switzerland",
+                                         "CI" = "Ivory Coast",
+                                         "CK" = "Cook Islands",
+                                         "CL" = "Chile",
+                                         "CM" = "Cameroon",
+                                         "CN" = "China",
+                                         "CO" = "Colombia",
+                                         "CR" = "Costa Rica",
+                                         "CU" = "Cuba",
+                                         "CV" = "Cape Verde",
+                                         "CW" = "Curacao",
+                                         "CY" = "Cyprus",
+                                         "CZ" = "Czech Republic",
+                                         "DE" = "Germany",
+                                         "DJ" = "Djibouti",
+                                         "DK" = "Denmark",
+                                         "DM" = "Dominica",
+                                         "DO" = "Dominican Republic",
+                                         "DZ" = "Algeria",
+                                         "EC" = "Ecuador",
+                                         "EE" = "Estonia",
+                                         "EG" = "Egypt",
+                                         "EH" = "Western Sahara",
+                                         "ER" = "Eritrea",
+                                         "ES" = "Spain",
+                                         "ET" = "Ethiopia",
+                                         "FI" = "Finland",
+                                         "FJ" = "Fiji",
+                                         "FK" = "Falkland Islands",
+                                         "FM" = "Micronesia",
+                                         "FO" = "Faroe Islands",
+                                         "FR" = "France",
+                                         "GA" = "Gabon",
+                                         "GB" = "United Kingdom",
+                                         "GD" = "Grenada",
+                                         "GE" = "Georgia",
+                                         "GF" = "French Guiana",
+                                         "GG" = "Guernsey",
+                                         "GH" = "Ghana",
+                                         "GI" = "Gibraltar",
+                                         "GL" = "Greenland",
+                                         "GM" = "Gambia",
+                                         "GN" = "Guinea",
+                                         "GQ" = "Equatorial Guinea",
+                                         "GR" = "Greece",
+                                         "GT" = "Guatemala",
+                                         "GU" = "Guam",
+                                         "GW" = "Guinea-Bissau",
+                                         "GY" = "Guyana",
+                                         "HK" = "Hong Kong",
+                                         "HN" = "Honduras",
+                                         "HR" = "Croatia",
+                                         "HT" = "Haiti",
+                                         "HU" = "Hungary",
+                                         "ID" = "Indonesia",
+                                         "IE" = "Ireland",
+                                         "IL" = "Israel",
+                                         "IM" = "Isle of Man",
+                                         "IN" = "India",
+                                         "IQ" = "Iraq",
+                                         "IR" = "Iran",
+                                         "IS" = "Iceland",
+                                         "IT" = "Italy",
+                                         "JE" = "Jersey",
+                                         "JM" = "Jamaica",
+                                         "JO" = "Jordan",
+                                         "JP" = "Japan",
+                                         "KE" = "Kenya",
+                                         "KG" = "Kyrgyzstan",
+                                         "KH" = "Cambodia",
+                                         "KI" = "Kiribati",
+                                         "KM" = "Comoros",
+                                         "KN" = "Saint Kitts and Nevis",
+                                         "KP" = "North Korea",
+                                         "KR" = "South Korea",
+                                         "KW" = "Kuwait",
+                                         "KY" = "Cayman Islands",
+                                         "KZ" = "Kazakhstan",
+                                         "LA" = "Laos",
+                                         "LB" = "Lebanon",
+                                         "LC" = "Saint Lucia",
+                                         "LI" = "Liechtenstein",
+                                         "LK" = "Sri Lanka",
+                                         "LR" = "Liberia",
+                                         "LS" = "Lesotho",
+                                         "LT" = "Lithuania",
+                                         "LU" = "Luxembourg",
+                                         "LV" = "Latvia",
+                                         "LY" = "Libya",
+                                         "MA" = "Morocco",
+                                         "MC" = "Monaco",
+                                         "MD" = "Moldova",
+                                         "ME" = "Montenegro",
+                                         "MG" = "Madagascar",
+                                         "MH" = "Marshall Islands",
+                                         "MK" = "Macedonia",
+                                         "ML" = "Mali",
+                                         "MM" = "Myanmar",
+                                         "MN" = "Mongolia",
+                                         "MP" = "Northern Mariana Islands",
+                                         "MQ" = "Martinique",
+                                         "MR" = "Mauritania",
+                                         "MS" = "Montserrat",
+                                         "MT" = "Malta",
+                                         "MU" = "Mauritius",
+                                         "MV" = "Maldives",
+                                         "MW" = "Malawi",
+                                         "MX" = "Mexico",
+                                         "MY" = "Malaysia",
+                                         "MZ" = "Mozambique",
+                                         "NA" = "Namibia",
+                                         "NC" = "New Caledonia",
+                                         "NE" = "Niger",
+                                         "NG" = "Nigeria",
+                                         "NI" = "Nicaragua",
+                                         "NL" = "Netherlands",
+                                         "NO" = "Norway",
+                                         "NP" = "Nepal",
+                                         "NR" = "Nauru",
+                                         "NU" = "Niue",
+                                         "NZ" = "New Zealand",
+                                         "OM" = "Oman",
+                                         "PA" = "Panama",
+                                         "PE" = "Peru",
+                                         "PF" = "French Polynesia",
+                                         "PG" = "Papua New Guinea",
+                                         "PH" = "Philippines",
+                                         "PK" = "Pakistan",
+                                         "PL" = "Poland",
+                                         "PN" = "Pitcairn",
+                                         "PR" = "Puerto Rico",
+                                         "PS" = "Palestine",
+                                         "PT" = "Portugal",
+                                         "PW" = "Palau",
+                                         "PY" = "Paraguay",
+                                         "QA" = "Qatar",
+                                         "RE" = "Reunion",
+                                         "RO" = "Romania",
+                                         "RS" = "Serbia",
+                                         "RU" = "Russia",
+                                         "RW" = "Rwanda",
+                                         "SA" = "Saudi Arabia",
+                                         "SB" = "Solomon Islands",
+                                         "SC" = "Seychelles",
+                                         "SD" = "Sudan",
+                                         "SE" = "Sweden",
+                                         "SG" = "Singapore",
+                                         "SH" = "Saint Helena",
+                                         "SI" = "Slovenia",
+                                         "SK" = "Slovakia",
+                                         "SL" = "Sierra Leone",
+                                         "SM" = "San Marino",
+                                         "SN" = "Senegal",
+                                         "SO" = "Somalia",
+                                         "SR" = "Suriname",
+                                         "SS" = "South Sudan",
+                                         "ST" = "Sao Tome and Principe",
+                                         "SV" = "El Salvador",
+                                         "SX" = "Sint Maarten",
+                                         "SY" = "Syria",
+                                         "SZ" = "Swaziland",
+                                         "TC" = "Turks and Caicos Islands",
+                                         "TD" = "Chad",
+                                         "TG" = "Togo",
+                                         "TH" = "Thailand",
+                                         "TJ" = "Tajikistan",
+                                         "TK" = "Tokelau",
+                                         "TL" = "East Timor",
+                                         "TM" = "Turkmenistan",
+                                         "TN" = "Tunisia",
+                                         "TO" = "Tonga",
+                                         "TR" = "Turkey",
+                                         "TT" = "Trinidad and Tobago",
+                                         "TV" = "Tuvalu",
+                                         "TW" = "Taiwan",
+                                         "TZ" = "Tanzania",
+                                         "UA" = "Ukraine",
+                                         "UG" = "Uganda",
+                                         "US" = "USA",
+                                         "UY" = "Uruguay",
+                                         "UZ" = "Uzbekistan",
+                                         "VA" = "Vatican",
+                                         "VC" = "Saint Vincent and the Grenadines",
+                                         "VE" = "Venezuela",
+                                         "VG" = "British Virgin Islands",
+                                         "VI" = "U.S. Virgin Islands",
+                                         "VN" = "Vietnam",
+                                         "VU" = "Vanuatu",
+                                         "WF" = "Wallis and Futuna",
+                                         "WS" = "Samoa",
+                                         "XK" = "Kosovo",
+                                         "YE" = "Yemen",
+                                         "YT" = "Mayotte",
+                                         "ZA" = "South Africa",
+                                         "ZM" = "Zambia",
+                                         "ZW" = "Zimbabwe"))
+
+world_map <- map_data("world")
+world_covid <- inner_join(covid,
+                          world_map,
+                          by = c("key" = "region"))
+
+plain <- theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank(),
+  panel.background = element_rect(fill = "white"),
+  plot.title = element_text(hjust = 0.5))
+
+ggplot(data = world_covid,
+       mapping = aes(x = long,
+                     y = lat,
+                     group = group)) +
+  coord_fixed(1.3) +
+  geom_polygon(aes(fill = total_confirmed)) +
+  scale_fill_distiller(palette = "Spectral",
+                       direction = -1,
+                       trans="log10",
+                       breaks = c(10,100,1000,10000,100000,1000000,10000000)) +
+  ggtitle("Covid-19 Total Confirmed Cases Map") +
+  plain +
+  guides(fill = guide_legend(title = "Total Confirmed Cases"))
+```
+
+# Introduction
+
+## Abstract
+
+The COVID-19 Pandemic is undoubtedly the most significant event in recent human history, and the spread of the SARS-CoV-2 virus to every country on Earth has prompted extensive discussion over the effectiveness of different countries' responses to the virus.  The effectiveness of these responses was analyzed, with a focus on the United States, using several methods.  In order to accurately compare the COVID-19 situation in different countries, the primary metric used was *Positivity Rate*, measured as the number of confirmed positive cases over number of total tested.  It was found that of the key countries considered, the United States did not have the largest *Positivity Rate* - that distinction belongs to the United Kingdom.  Furthermore, a convincing correlation between *Positivity Rate* and Population Density was not found, which were fairly surprising results considering that the transmission vectors of SARS-CoV-2 require close proximity with infected persons.  A Multivariable Linear Regression model the United State's *Positivity Rate* was built, and this model accurately predicted total deaths at a future date.  Finally, the change in US Public Sentiment with the progression of the virus was analyzed, and a correlation between *Positivity Rate* and Public Sentiment towards the virus was not found.
+
+## Analysis Conducted
+
+Our goal for this investigation was to determine the effectiveness of the United States's response to the COVID-19 pandemic, to model the spread of the virus through the United States, and to discover how public sentiment towards the virus changed as the pandemic progressed.
+
+There are a multitude of factors that differentiate countries (including population size, population density, demographic breakdown, level of development, cultural differences, etc.) that make meaningful comparison difficult.  In an attempt to standardize each country's response to the pandemic, the metric of *Positivity Rate* was chosen, which for a given time point and country is defined as:
+$$
+\text{Positivity Rate} = \frac{\text{Total Number of Confirmed Cases}}{\text{Total Number of People Tested}}
+$$
+To compare the United States's response to the COVID-19 Pandemic, *Positivity Rate* was plotted over time, along with four other key countries.  Additionally, there was curiosity to see what, if any, change to *Positivity Rate* occurred in response to key time points in the Pandemic.  As the primary vectors of transmission for SARS-CoV-2 are through aerosolized bodily fluids, an attempt to determine if there was a relationship between *Positivity Rate* and Population Density was made by plotting each country along those metrics and observing the results.
+
+There was interest to see if the United States's response to COVID-19 could be modeled, and performed a multivariable linear regression in an attempt to produce a model that could predict future deaths with some degree of accuracy.
+
+Finally, the response to COVID-19 has become a significant political issue, and has inspired many anti-shutdown protests across the United States.  There was curiosity to see how the Public Sentiment towards COVID-19 changed, and if there was any relationship between Public Sentiment and *Positivity Rate*.
+
+## Data Sources
+
+The data used was sourced primarily from the Google Cloud Platform repository of COVID-19 data, which is a repository of aggregated and curated info relating to COVID-19.  This repository pulls data from Wikipedia, Eurostat, DataCommons, and other direct sources such as countries' ministries of health.
+$$
+\text{https://github.com/GoogleCloudPlatform/covid-19-open-data}
+$$
+To create our multivariable linear regression, a secondary dataset from OurWorldInData was used.  This dataset was chosen because it factored the data into multiple variables, making it more convenient for building a regression model.
+$$
+\text{https://ourworldindata.org/coronavirus}
+$$
+To determine public sentiment, the text of several thousand articles published by the New York Times was scraped and the sentiment score of the wording of each article was analyzed.  The positive and negative sentiment scores of articles over time were used as an analogue for Public Sentiment.
+
+# Positivity Rate Comparrison
+
+## Key Countries Chosen
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.cap="Proportinal comparison of the five key countries chosen, on several methods."}
+# Epidemiology for all countries
+query <- paste0("
+                SELECT *
+                FROM epidemiology
+                WHERE key IN ('US', 'KR', 'JP', 'GB', 'IN');
+                ")
+
+res <- dbSendQuery(conn = dcon, query)
+epi2 <- dbFetch(res, -1)
+epi2 <- as.data.frame(epi2)
+dbClearResult(res)
+
+epi2$date <-as.Date(epi2$date)
+epi2 %>%
+  mutate_at(vars(new_deceased,
+                 new_recovered,
+                 new_tested,
+                 total_deceased,
+                 total_tested,
+                 total_recovered), 
+            as.integer) -> epi2
+
+epi2 <- epi2[,-5]
+epi2 <- epi2[,-8]
+epi2 <- epi2[,-4]
+
+epi2 <- subset(epi2, date > "2020-02-29"& date < "2020-10-24")
+
+# Positivity Rate
+query <- paste0("
+                SELECT *
+                FROM epidemiology
+                WHERE key LIKE 'US%'
+                OR key LIKE 'KR%'
+                OR key LIKE 'JP%'
+                OR key LIKE 'GB%'
+                OR key LIKE 'IN%';
+                ")
+res <- dbSendQuery(dcon, query)
+epidemiology2 <- dbFetch(res, -1)
+dbClearResult(res) 
+
+epidemiology2 %>% 
+  filter(key%in% c("US","KR","GB","IN", "JP")) %>% 
+  dplyr::select(date,key,total_tested,total_confirmed)-> positive
+
+positive %>% 
+  mutate(positive_rate=as.numeric(total_confirmed)/as.numeric(total_tested)) ->positive
+positive$positive_rate <- replace(positive$positive_rate ,is.infinite(positive$positive_rate ),NA)
+
+positive$date <- as.Date(positive$date,format="%Y-%m-%d")
+positive <- subset(positive,date > "2020-02-29" & date < "2020-10-24")
+
+##### Tidying the data ######
+epi2rates <- cbind(epi2, positive$positive_rate)
+
+colnames(epi2rates) <- c("date",
+                         "key",
+                         "New Confirmed",
+                         "New Tested",
+                         "Total Confirmed",
+                         "Total Deceased",
+                         "Total Tested",
+                         "Positivity Rate")
+# Convert the data 
+epi2_long <- pivot_longer(epi2, cols = 3:7, names_to = "type", values_to = "number")
+epi2_rates_long <- pivot_longer(epi2rates, cols = 3:8, names_to = "type", values_to = "number")
+
+
+#################### Plotting the bar graphs #################################
+
+#Proportional Graph
+Bar1 <- ggplot(data = epi2_rates_long,
+               aes(x = type, y = number)) +
+  geom_bar(stat = "identity",
+           aes(fill = key),
+           position = "fill") +
+  theme1 +
+  labs(fill = "Country Code") +
+  scale_fill_manual(values=cbPalette) +
+  ggtitle("COVID Proportional Statistics") +
+  ylab("Proportions of count") +
+  xlab("Type") +
+  theme(axis.text.x = element_text(angle=45,
+                                   vjust=1,
+                                   hjust=1))
+Bar1
+```
+
+It was determined that comparing the United States's COVID-19 response to every other country was not feasible, so four key countries were chosen: The United Kingdom, India, Japan, and South Korea.  These countries were selected because they each display unique considerations:
+
+* The United Kingdom's Prime Minister was hospitalized after contracting SARS-CoV-2, and the country did not impose travel restrictions.
+* India's population is significantly larger and more dense than the United States.
+* Japan had one of the earliest government responses to COVID-19 in terms of travel restrictions and economic shutdown.
+* South Korea experienced it's first confirmed case on the same day as the United States, and the country did not impose any official economic shutdown measures.
+
+Our goal is to compare these four countries in terms of *Positivity Rate*, and as can be seen in Fig.2, it appears that the United States accounts for about 50% of total counts for each variable plotted - however, the United States also accounts for over 50% of *Total Tested*, so there was interest to see how this would impact *Positivity Rate* over time.
+
+## Positivity Rate Comparison between Key Countries
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide',fig.cap="Plot of changes in Positivity Rate over time for the five key countries.  Additionally, key dates have been marked with vertical lines."}
+###positive rate
+#get every countries 
+query <- paste0("
+                SELECT *
+                FROM epidemiology
+                WHERE key NOT LIKE '%/_%' escape '/';
+                ")
+res <- dbSendQuery(dcon, query)
+covid <- dbFetch(res, -1)
+dbClearResult(res)
+
+#total tested, confirmed, date=2020-10-15, create positive rate
+covid <- covid  %>%
+  dplyr::select(date, key, total_confirmed, total_tested) %>%
+  subset(date == "2020-10-15") %>%
+  mutate(
+    total_confirmed = as.numeric(total_confirmed),
+    total_tested = as.numeric(total_tested)
+  ) %>%
+  mutate(positive = as.numeric(total_confirmed / total_tested))
+covid <- covid[which(!is.na(covid$total_tested) == TRUE), ]
+covid <- covid[!is.infinite(covid$positive), ]
+
+###density
+query <- paste0("
+                SELECT *
+                FROM density;
+                ")
+res <- dbSendQuery(dcon, query)
+density <- dbFetch(res,-1)
+dbClearResult(res)
+
+density <- density %>% 
+  filter(Countrycode%in% c(840,410,826,356,392,32,40,76,124,818,20,
+                           620,634,710,724,380,400,458,554,702,304,250,50,246,
+                           524,756,276,152,604,586,36,352,704,608,56,376,887,
+                           484,158)) %>% 
+  dplyr::select(`Regionsubregioncountryorarea*`,"2020")
+
+density$`Regionsubregioncountryorarea*` <-
+  str_replace_all(density$`Regionsubregioncountryorarea*`,
+                  c("South Africa" = "ZA",
+                    "Egypt" = "EG",
+                    "Jordan" = "JO",
+                    "Qatar" = "QA",
+                    "India" = "IN",
+                    "Japan" = "JP",
+                    "Republic of Korea" = "KR",
+                    "Malaysia" = "MY",
+                    "Singapore" = "SG",
+                    "Argentina" = "AR",
+                    "Brazil" = "BR",
+                    "New Zealand" = "NZ",
+                    "United Kingdom" = "GB",
+                    "Andorra" = "AD",
+                    "Italy" = "IT",
+                    "Portugal" = "PT",
+                    "Spain" = "ES",
+                    "Austria" = "AT",
+                    "Canada" = "CA",
+                    "United States of America" = "US",
+                    "Greenland" = "GL",
+                    "France" = "FR",
+                    "Bangladesh" = "BD",
+                    "Finland" = "FI",
+                    "Nepal" = "NP",
+                    "Switzerland" = "CH",
+                    "Germany" = "DE",
+                    "Chile" = "CL",
+                    "Peru" = "PE",
+                    "Pakistan" = "PK",
+                    "Australia" = "AU",
+                    "Iceland" = "IS",
+                    "Viet Nam" = "VN",
+                    "Philippines" = "PH",
+                    "Belgium" = "BE",
+                    "Israel" = "IL",
+                    "Yemen" = "YE",
+                    "Mexico" = "MX",
+                    "China, Taiwan Province of China" = "TW"))
+density <- density %>%
+  rename(density = "2020",
+         region = `Regionsubregioncountryorarea*`)
+
+##join covid and density
+covid_density <- inner_join(covid,density,
+                            by = c("key" = "region"))
+covid_density$density <- as.numeric(covid_density$density)
+
+#######################positive time series
+
+#get the data for positive rate time series 
+query <- paste0("
+                SELECT *
+                FROM epidemiology
+                WHERE key IN ('US','KR','GB','IN','JP');
+                ")
+res <- dbSendQuery(dcon, query)
+positive_ts <- dbFetch(res, -1)
+dbClearResult(res)
+
+positive_ts <- positive_ts %>%
+  dplyr::select(date, key, total_tested, total_confirmed) %>%
+  subset(date > "2020-02-29" & date < "2020-10-15") %>%
+  mutate(positive_rate = as.numeric(total_confirmed) / as.numeric(total_tested)) %>%
+  mutate(date = as.Date(date), format = "%Y-%m-%d")
+
+positive_ts$positive_rate <- replace(positive_ts$positive_rate,
+                                     is.infinite(positive_ts$positive_rate),
+                                     NA)
+
+ggplot(data = positive_ts[!is.na(positive_ts$positive_rate), ]) +
+  aes(x = date,
+      y = positive_rate * 100,
+      color = key) +
+  geom_line(size = 1.2) +
+  theme1 +
+  scale_colour_manual(values = cbPalette) +
+  labs(title = "COVID - Positivity Rate by Date",
+       x = "Date",
+       y = "Positivity Rate (%)",
+       color = "Country Code") +
+  scale_x_date(labels = date_format("%Y-%m"),
+               breaks = "1 month",
+               date_labels = "%B") +
+  geom_vline(xintercept = c(as.numeric(as.Date("2020-03-11")),
+                            as.numeric(as.Date("2020-03-19")),
+                            as.numeric(as.Date("2020-03-25")),
+                            as.numeric(as.Date("2020-04-05"))),
+             linetype = c(2, 1, 6, 4)) +
+  annotate(geom="text",
+           x = as.Date("2020-05-15"),
+           y = 20:17,
+           hjust=0,
+           label=c("March 11",
+                   "March 16",
+                   "March 25",
+                   "April 5")) +
+  annotate(geom="text",
+           x = as.Date("2020-06-20"),
+           y = 20:17,
+           hjust=0,
+           label=c("WHO declared Pandemic",
+                   "US 1st shutdown order",
+                   "IN 1st shutdown order",
+                   "Boris Johnson admitted to hospital"))
+```
+
+Fig.3 shows a plot of the *Positivity Rate*s of the five key countries over time, and a few notable trends present themselves. Immediately, it can be seen that the United States did not experience the highest *Positivity Rate*, the country that did was the United Kingdom, and this occurred shortly after the UK Prime Minister Boris Johnson was hospitalized after infection with SARS-CoV-2.  After this time point, UK *Positivity Rate* drops significantly.
+
+Secondly, it can be observed that each country experienced a general decrease in *Positivity Rate* over time, even after temporary increases (as can be seen with Japan and United States), with the only exception being India, which experienced a steady increase.  But what is interestingly unique to the United States is the lack of stability in *Positivity Rate* - whereas other countries experienced steady changes, the United States experienced very extreme changes in *Positivity Rate* in the first half of 2020, which suggest that the government response was not as well organized as that of the other four countries.
+
+Finally, there was curiosity to see if any patterns emerged if key dates in the pandemic timeline were highlighted.  The United States had the most pronounced responses to these milestone dates, responding to each date with a sharp drop in *Positivity Rate*.  However, each response proves to be temporary and is accompanied by a sharp rise in *Positivity Rate* shortly afterwards.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide',fig.cap="Positivity Rate vs Total Tested Cases, with a smoothed LOESS regression method curve using the default parameters of span = 0.75 and degree = 2"}
+#######################plot positive vs total tested
+ggplot(covid,
+       aes(x = total_tested / 1000000,
+           y = positive * 100)) +
+  geom_point(aes(col = positive,
+                 size = total_tested),
+             alpha = 0.5) +
+  geom_smooth(method = "loess",
+              se = F) +
+  labs(title = "Positivity Rate vs Total Tested Cases",
+       x = "Total Tested Cases (million)",
+       y = "Positivity Rate (%)",
+       size="Total Tested",
+       col="Positivity Rate") +
+  theme1
+```
+
+Earlier it was noted that the United States had a very large number of *Total Tested* cases, and it is worth investigating to see if there is a relationship between *Positivity Rate* and *Total Tested*.  Fig.4 plots the *Positivity Rate* vs *Total Tested* for ever country and adds a smooth curve using the LOESS regression method, it can be seen that the curve captures almost no data points, and thus a very weak relationship between these two metrics can be inferred.
+
+## Positivity Rate vs Population Density
+
+One of the key countries chosen in our previous analysis, India, was picked because it had a population that is significantly larger and more dense than the United States.  Population density was a metric worth considering, because as mentioned previously, the primary vectors of transmission for SARS-CoV-2 are through aerosolized bodily fluids.  Thus, one would expect to see that countries with higher population densities would experience increased transmission of the virus.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.cap="Positivity Rate plotted against Population Density, with a smoothed LOESS regression method curve using the default parameters of span = 0.75 and degree = 2"}
+#######################plot positive vs density
+ggplot(covid_density,
+       aes(x = density,
+           y = positive * 100)) +
+  geom_point(aes(color = key,
+                 size = positive),
+             alpha = 0.5) +
+  geom_smooth(method = "loess",
+              se = F) +
+  labs(title = "Positivity Rate vs Density by Countries",
+       x = "Density (persons per square km)",
+       y = "Positivity Rate (%)",
+       size = "Positivity Rate") +
+  geom_text(aes(label = key),
+            hjust = 0,
+            vjust = 0,
+            size = 4) +
+  theme1
+```
+
+However, plotting these two variables (Fig.5) again fails to yield a convincing correlation. Plotting every country and adding a smooth curve using the LOESS regression method produces a curve that does not capture the distribution of data points.  Two countries of note are Bangladesh and Mexico.  Bangladesh has the highest population density of the countries analyzed, yet had a fairly low *Positivity Rate* in comparison to the country with highest.  Conversely, Mexico displays the highest *Positivity Rate* but has a low population density.
+
+It is noted that this analysis is not considered to be complete.  Further analysis is recommended to address the limitations of this plot, with the following considerations:
+
+* Inclusion of change in *Positivity Rate* vs Population Density over time
+* Population Density of specific cities or states, opposed to entire countries
+* Removal of outlier countries like Mexico and Bangladesh
+
+# Multivariable Linear Regression
+
+There was interest to see if it would be possible to model the Total COVID-19 Deaths in the United States.  Unfortunately, while the primary data source contained extensive COVID-19 data for several countries, it did not contain enough variables for to use as predictors in a regression model.  To rectify this, a secondary data source, from OurWorldInData was used, and the following predictors were chosen:
+
+* stringency index
+* diabetes prevalence
+* life expectancy
+* gdp per capita
+* aged 70 or older, and
+* positive rate
+
+to form the initial regression model, assuming $\alpha=0.05$.
+
+## Model Construction
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+query <- paste0("
+                SELECT iso_code, date, total_deaths_per_million, stringency_index, 
+                       diabetes_prevalence, life_expectancy, gdp_per_capita, 
+                       aged_70_older, positive_rate
+                FROM owd_covid_data
+                ;
+                ")
+
+res <- dbSendQuery(conn = dcon, query)
+Total_Deaths <- dbFetch(res, -1)
+Total_Deaths <- as.data.frame(Total_Deaths)
+dbClearResult(res)
+
+## Subset Total_Deaths to 2020-10-15 and filter out rows with NA's
+# str(Total_Deaths)
+
+Total_Deaths %>% filter(Total_Deaths$date == "2020-10-15") -> Total_Deaths
+Total_Deaths %>% mutate_at(vars(total_deaths_per_million, stringency_index, 
+                              diabetes_prevalence, life_expectancy,
+                              gdp_per_capita, aged_70_older, positive_rate), as.numeric) -> Total_Deaths
+
+Total_Deaths2 <- na.omit(Total_Deaths) #Resulting in 89 Total Regression points
+
+# Checking Normality @ alpha = 0.05
+shapiro.test(Total_Deaths2$total_deaths_per_million) # cannot conclude that the dataset is normal
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results=FALSE, fit.cap="Normality tests for initial Regression Model failed."}
+chart.QQPlot(Total_Deaths2$total_deaths_per_million) # QQplot shows us that it it is not iid. Perhaps a transformation is needed.
+```
+
+To create the initial model, a subset of the *Total Deaths* data was taken for the date "2020-10-15", omitting NA values.  Initial tests for normality failed (Shapiro-Wilkes yielded a p-value of 7.993e-12), so an effort was made to determine which predictors could be dropped,
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.cap="Dayong"}
+# MLR
+lm_Total_Deaths <- lm(total_deaths_per_million ~
+                        diabetes_prevalence +
+                        stringency_index +
+                        life_expectancy +
+                        gdp_per_capita +
+                        aged_70_older +
+                        positive_rate,
+                      data = Total_Deaths2)
+
+stargazer(lm_Total_Deaths,
+          title="Initial Model",
+          type='latex',
+          header=FALSE,
+          dep.var.labels = c("Total Deaths per Million"),
+          covariate.labels = c("Diabetes Prevalence",
+                             "Stringency Index",
+                             "Life Expectancy",
+                             "GDP per Capita",
+                             "Aged 70 or Older",
+                             "Positive Rate"))
+```
+
+As can be seen from Table 1, it appears that only Stringency Index and Positive Rate are predictors worth keeping - however, further tests were conducted to see if transformation would yield better results:
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fit.cap="Residual and Normality Plots for initial data set show it is not normal."}
+# Check Residuals
+par(mfrow = c(1,2))
+plot(fitted(lm_Total_Deaths),
+     resid(lm_Total_Deaths),
+     pch = 19,
+     main = "Full MLR Model",
+     xlab = "Fitted",
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+
+# Check Normality
+chart.QQPlot(lm_Total_Deaths$residuals) # Residuals show that it is not normal.
+```
+
+The triangular fanning pattern of the residual plot indicates the constant variance of errors is violated.  The obvious linear trend on the bottom is also undesirable.  The Q-Q plot confirms the distribution is not normal.  To address this, a Box-Cox transformation was used.
+
+## Transformation of Model Parameters
+
+A Box-Cox Transformation transforms non-normal dependent variables into a normal distribution, and is summarized by the formula,
+$$
+y(\lambda) = \begin{cases}
+\frac{y^\lambda-1}{\lambda} & \text{if }\lambda\neq0 \\
+\log(y) & \text{if }\lambda=0
+\end{cases}
+$$
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fit.cap="Box-Cox plot indicate a lambda of 0.18 is optimal."}
+# Assessing Possible Transformation
+boxcox(lm_Total_Deaths, lambda=seq(from = 0, to = 0.8, by = 0.005), plotit = T)
+```
+
+The resulting plot from the $boxcox$ function indicates a value of $\lambda=0.18$ is optimal.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+shapiro.test(I((Total_Deaths2$total_deaths_per_million^0.18 - 1)/0.18)) # Seems normal!
+chart.QQPlot(I((Total_Deaths2$total_deaths_per_million^0.18 - 1)/0.18)) # Q-Q Plot shows us it is normal!
+```
+
+Repeating the Shapiro-Wilkes test yields a p-value of 0.2324 which is greater than the decided alpha value of 0.05, thus the null hypothesis that the transformed data is not normal is not rejected.  A Q-Q Plot of the transformed data confirms it is normalized.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.cap="Dayong"}
+# Box-Cox Transformed Model, lambda = 0.18, removing diabetes_prevalence 
+lm_Total_Deaths.2 <- lm(I((total_deaths_per_million^0.18 - 1)/0.18) ~ stringency_index + gdp_per_capita + aged_70_older + positive_rate, data = Total_Deaths2)
+
+stargazer(lm_Total_Deaths.2,
+          title="Box-Cox Transformed Model",
+          type='latex',
+          header=FALSE,
+          dep.var.labels = c("Total Deaths per Million"),
+          covariate.labels = c("Stringency Index",
+                               "Life Expectancy",
+                               "GDP per Capita",
+                               "Positive Rate"))
+```
+
+Table 2 represents a finalized summary of data after performing the Box-Cox transformation and using step-wise regression (forward and reverse) to remove the predictors Diabetes Prevalence and Life Expectancy from the data.  While the low $R^2$ value of 0.415 is noted, the prediction of a test set will proceed.
+
+## Model Evaluation
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fit.cap="Resdidual plot and Normality plot for my transformed data indicate it is normal."}
+# Checking the Residuals of Transformed Model
+par(mfrow = c(1,2))
+plot(fitted(lm_Total_Deaths.2),
+     resid(lm_Total_Deaths.2),
+     pch = 19,
+     main = "Transformed Model",
+     xlab = "Fitted",
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+
+chart.QQPlot(lm_Total_Deaths.2$residuals) # Model Looks acceptable!
+```
+
+Post-transformation, a marked improvement can be seen in both residuals and normal Quantiles.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fit.cap="plot of Cook's Distance indicates there are no outliers"}
+# Remove Potential Outliers
+n <- length(Total_Deaths2$total_deaths_per_million)
+p <- length(coef(lm_Total_Deaths.2))
+
+hii <- influence(lm_Total_Deaths.2)$hat
+large.hii.index <- which(hii > 2*p/n)
+# hii[large.hii.index]
+F_crit.val <- qf(0.95, p, n-p)
+
+cooks.dist <- influence.measures(lm_Total_Deaths.2)$infmat[c(119, 126, 135, 161)]
+# cooks.dist
+
+plot(cooks.distance(lm_Total_Deaths.2),
+     pch = 19,
+     ylim = c(0.01, 2.5),
+     main = "Cook's Distance",
+     xlab = "Index",
+     ylab = "Cook's Distance")
+abline(h = F_crit.val, col = "red")
+
+# As we can see, there are technically no outliers.
+```
+
+A check was conducted to detect outliers that could affect the data set, but the Cook's Distance plot shows no outliers above the F-statistic (red line), which indicates that there are no influential outliers.
+
+The next step was to subset the original dataset as before, but for the date "10-27-2020".
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+############ Prediction of a different date while removing diabetes_prevalence ############
+# Create new dataset for a different date 2020-10-27
+query <- paste0("
+                SELECT iso_code, date, total_deaths_per_million, stringency_index, 
+                       life_expectancy, gdp_per_capita, aged_70_older,
+                       positive_rate
+                FROM owd_covid_data
+                ;
+                ")
+
+res <- dbSendQuery(conn = dcon, query)
+Total_Deaths.test <- dbFetch(res, -1)
+Total_Deaths.test <- as.data.frame(Total_Deaths.test)
+dbClearResult(res)
+
+#print("Summary of Test Data:")
+#stargazer(str(Total_Deaths.test))
+
+Total_Deaths.test %>% filter(Total_Deaths.test$date == "2020-10-27") -> Total_Deaths.test
+Total_Deaths.test %>% mutate_at(vars(total_deaths_per_million, stringency_index, 
+                                life_expectancy, gdp_per_capita, aged_70_older, 
+                                positive_rate), as.numeric) -> Total_Deaths.test
+
+Total_Deaths.test2 <- na.omit(Total_Deaths.test) #Resulting in 87 Total Regression points
+
+Predicted.vals <- predict(lm_Total_Deaths.2, Total_Deaths.test2[4:8], interval = "predict")
+Test_Predict <- cbind(I((Total_Deaths.test2$total_deaths_per_million^0.18 -1)/0.18) ,Predicted.vals)  
+colnames(Test_Predict) <- c("Test", "Predicted", "Lwr", "Upr")  
+Test_Predict <- as.data.frame(Test_Predict)
+
+Bad <- which(Test_Predict$Test > Test_Predict$Upr | Test_Predict$Test < Test_Predict$Lwr)
+Bad_interval <- Test_Predict[Bad, ]
+Accuracy <- rep("Bad", length(Bad_interval$Test))
+Bad_interval <- cbind(Bad_interval, Accuracy)
+
+Good_interval <- Test_Predict[-Bad, ]
+Accuracy <- rep("Good", length(Good_interval$Test))
+Good_interval <- cbind(Good_interval, Accuracy)
+
+Test_Predict <- rbind(Bad_interval, Good_interval)
+ID <- rownames(Test_Predict)
+# head(Test_Predict)
+
+# Calculate accuracy of MLR for Test via Root Mean Squared Errors
+RMSE_lm.test <- rmse(Test_Predict$Test, Test_Predict$Predicted)
+# paste0("Accuracy of MLR for Test Data via RMSE: ", RMSE_lm.test)
+
+# For Training data
+predict_train <- predict(lm_Total_Deaths.2, Total_Deaths2[c(4,6:9)], interval = "predict")
+RMSE_lm.train <- rmse(I((Total_Deaths2$total_deaths_per_million^0.18 - 1)/0.18), predict_train[,1])  
+paste0("Accuracy of MLR for Training Data via RMSE: ", RMSE_lm.train)
+```
+Which yields Mean-Squared Error Values of:
+$$
+\text{Accuracy of MLR for Test Data via RMSE: } = 2.7234
+$$
+$$
+\text{Accuracy of MLR for Training Data via RMSE: } = 2.6048
+$$
+The Root Mean-Squared Error values are fairly large compared to the Box-Cox-transformed range of the data, and so they are a valid cause for concern and an issue to address in future refinements of this analysis.  For now, the prediction will proceed.
+
+## Prediction of Total Deaths per Million
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.cap="MLR-Predicted Total Deaths per Million vs True Total Deaths per Million. Second plot displays confidence intervals and highlights incorrect predictions."}
+# Plotting the Tested vs 
+
+## Predicted vs Test Values
+ggplot(data = Test_Predict, aes(Test, Predicted)) +
+  geom_ribbon(aes(ymin = Lwr, ymax = Upr), fill = "grey70") +
+  geom_line(aes(y = Predicted)) +
+  theme1 +
+  scale_colour_manual(values=cbPalette) +
+  ggtitle("Predicted vs True") +
+  xlab("True Total Deaths per Million") +
+  ylab("Fitted Deaths per Million")
+
+## Scatterplot with Error Bars
+ggplot(data = Test_Predict, aes(x = ID)) +
+  geom_point(aes(y = Predicted, color = factor(Accuracy))) +
+  geom_errorbar(aes(ymin = Lwr, ymax = Upr, color = factor(Accuracy))) +
+  geom_point(aes(y = Test), color = "black") +
+  theme1 +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  ggtitle("Total Deaths Per Million: Predicted and True Values") +
+  ylab("Box-Cox Transformed Total Deaths Per Million") +
+  xlab("Observations")
+  scale_fill_manual("Accuracy", )
+```
+
+The end result of the Multivariable Linear Regression was a model that predicted future Total COVID-19 Deaths per million using predictors:
+
+* stringency index
+* life expectancy
+* gdp per capita
+* aged 70 or older, and
+* positive rate
+
+Again, it should be mentioned that some statistical values ($R^2$, RMSE) were less than satisfactory, so room for improvement certainly exists.
+
+This MLR model was constructed through a Box-Cox transformation of the data set and step-wise forward and reverse regression. There were no significant outliers that leveraged the data and thus, a prediction could be made with some test data (this prediction of course assumes that the world remains the same without the discovery of a vaccine) with an expected accuracy of $94.2529$.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+#Test Prediction Accuracy
+Accuracy.Percent <- length(which(Test_Predict$Accuracy == "Good"))/length(Test_Predict$Test)*100
+# paste0("MLR Model Accuracy: ", Accuracy.Percent)
+```
+
+# US Public Sentiment on COVID-19
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.cap="Word Cloud of most common words pertaining to the topics of 'U.S.', 'Health', and 'World', generated using text scraped from NYT articles related to COVID-19"}
+dt.all$date <- as.Date(dt.all$date,
+                       format="%Y-%m-%d")
+
+# Corpus
+mycorpus <- corpus(dt.all,
+                   docid_field="id",
+                   text_field ="text",
+                   meta=list("section_name",
+                             "subsection_name",
+                             "date",
+                             "word_count"))
+
+# Tokens
+toks.nostem <- tokens(mycorpus,
+                      remove_punct = TRUE,
+                      remove_numbers = TRUE,
+                      remove_symbols = TRUE,
+                      remove_url = TRUE,
+                      remove_separators =TRUE)
+toks.nostem<- tokens_tolower(toks.nostem,
+                             keep_acronyms = FALSE)
+toks.nostem <- tokens_select(toks.nostem,
+                             pattern = stopwords("en"),
+                             selection = "remove")
+abb <- c("ms",
+         "rt",
+         "lol",
+         "im",
+         "st",
+         "u.s",
+         "p.m." ,
+         "a.m",
+         "mr",
+         "dr",
+         "ll",
+         "ur",
+         "co")
+toks.nostem <- tokens_select(toks.nostem,
+                             pattern = abb,
+                             selection = "remove")
+  ## stem
+toks <- tokens_wordstem(toks.nostem) 
+
+# DFM
+dfm <- dfm(toks) 
+
+# word cloud
+set.seed(132)
+corpus_subset(mycorpus, 
+              section_name %in% c("U.S.",
+                                  "World",
+                                  "Health")) %>%
+  dfm(groups = "section_name",
+      remove = stopwords("english"),
+      remove_punct = TRUE,
+      remove_numbers = TRUE,
+      remove_symbols = TRUE,
+      remove_url = TRUE,
+      remove_separators =TRUE) %>%
+  dfm_select(pattern = abb,
+             selection = "remove") %>%
+  # dfm_trim(min_termfreq = 400, verbose = FALSE, termfreq_type="count") %>%
+  textplot_wordcloud(comparison = TRUE,
+                     min_count = 600,
+                     height='20')
+```
+
+## New York Times Article Scraping
+
+For the final component of this analysis, the change in public sentiment towards COVID-19 in the United States over time was analyzed.  COVID-19 has become a very politicized issue as a result of misleading statements by then US President Donald Trump, anti-China prejudice, widespread conspiracy theories of the virus being a hoax, and other factors.  This has prompted several anti-mask and anti-shutdown protests, and many hypothesize that these sentiments affected (possibly hampered) the United States's response to COVID-19.  There was curiosity to see how the Public Sentiment towards COVID-19 changed over time.
+
+Tthe most prominent newspaper in the United States, the New York Times, was chosen as an indicator for Public Sentiment.  Using the NYT API and the R package $rvest$, a scraping of the text of all NYT articles that were a hit for a keyword search of *"coronavirus"* between the dates of January 20 and October 26 was conducted.  The resulting list of articles were filtered to only include articles marked as *News* and *News Analysis* (and exclude *opinion*, *briefing*, etc.).  The text of the resulting list of 14,972 articles was analyzed.
+
+To process the text, the collection of articles was converted into a *corpus* object, and then tokenized into individual words.  The R package $quanteda$ was then used to remove stopwords, punctuation, abbreviations, numbers, symbols, urls, and other irrelevant text, and all words were converted to lowercase.
+
+Instead of using a more complex positional (string-or-words) approach, a non-positional (bag-of-words) approach to text analysis was taken.  For each article, the number of "Positive Words" and the number of "Negative Words" were counted, and each article was assigned a *Sentiment Score*:
+$$
+\text{Sentiment Score}=\frac{\text{\# of positive words - \# of negative words}}{\text{\# of positive words + \# of negative words}}
+$$
+To determine which words were positive and which were negative, the Lexicoder Sentiment Dictionary (2015) was used.  Some examples of positive and negative words are:
+
+Negative:
+
+* Abandon
+* Abnormal
+* Accursed
+* ...
+
+Positive:
+
+* Ability
+* Abundant
+* Accomplish
+* ...
+
+## US Public Sentiment on COVID-19 vs Positivity Rate
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.cap="Sentiment Scores of NYT articles about COVID-19 over time, with US Positivity Rate superimposed."}
+# use dictionary method
+sent <-tokens_lookup(toks.nostem,
+                     dictionary = data_dictionary_LSD2015) %>%
+  dfm() %>%
+  convert(to="data.frame")
+
+dt.all <- dt.all %>%
+  mutate(sentiment = (sent$positive- sent$negative)/(sent$positive+ sent$negative))
+
+# sentiment score by day
+dt.sent <- dt.all %>% group_by(date) %>%
+  summarise(Senti = mean(sentiment)) %>%
+  drop_na()
+
+posi.rate <- read.csv("Positive_rates.csv")
+posi.rate <- posi.rate %>%
+  filter(key=="US") %>%
+  rename("date" = "dates") %>%
+  filter(date > "2020-02-29")
+
+posi.rate$date <- as.Date(posi.rate$date)
+  ## merge
+dt.sent <- dt.sent %>% left_join(posi.rate,
+                                 by = "date")
+
+# plot
+dt.sent %>%
+  ggplot() +
+  geom_hline(yintercept = 0,
+             color = "darkgray") +
+  geom_line(aes(x = date, y = Senti),
+            color = "black") +
+  geom_line(aes(x = date,
+                y = Positive_rate),
+            color = "blue") +
+  theme1 +
+  labs(title = "Public Sentiment toward COVID-19 using NYT") +
+  scale_x_date(name = "Date",
+               date_breaks = "1 month",
+               date_labels = "%B") +
+  scale_y_continuous(name = "Sentiment Score",
+                     sec.axis = sec_axis( ~ . * 100,
+                                          name = "Positivity Rate")) +
+  theme(
+    axis.title.y = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "blue")
+  )
+```
+
+Plotting the *Sentiment Score* of NYT articles over time (Fig.7), a clear initial upward trend can be seen following a negative initial value, then stabilization above positive.  However, a pattern does not present itself when US *Positivity Rate* is superimposed.  *Sentiment Score* increased as *Positivity Rate* decreased, suggesting an inverse correlation, but this was not observed when *Positivity Rate* increased in mid-March.  However, it is interesting to note that this increase in *Positivity Rate* was accompanied by a tighter spread of *Sentiment Score* - when *Positivity Rate* was peaking, *Sentiment Scores* had the least variability.  This interesting observation would be a good candidate for future analysis.
+
+# Summary of Key Findings
+
+* The United States did not experience the largest *Positivity Rate* of the countries analyzed, but did experience the most erratic changes in *Positivity Rate* over time.
+* *Positivity Rate* in the United States did respond to key dates in the COVID-19 Pandemic timeline, but responses were temporary.
+* A correlation between *Positivity Rate* and Population Density was not found.
+* A Multivariable Linear Regression Model for Total COVID-19 Deaths was built that could predict Total Deaths at a future date with 94% accuracy.
+* *Public Sentiment* in the United States towards COVID-19 was very low initially, but increased over time, and did not correlate with *Positivity Rate*.
